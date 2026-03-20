@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"new-relic-monitor/config"
-	newrelic "new-relic-monitor/newRelic"
+	"new-relic-monitor/newRelic"
 )
 
 type BucketFile struct {
@@ -22,8 +22,8 @@ type BucketFile struct {
 	Name       string
 }
 
-func (bf *BucketFile) ToNewRelicEvent() map[string]interface{} {
-	event := map[string]interface{}{
+func (bf *BucketFile) ToNewRelicEvent() map[string]any {
+	event := map[string]any{
 		"name":       bf.Name,
 		"modifiedat": bf.ModifiedAt.String(),
 		"size":       bf.Size,
