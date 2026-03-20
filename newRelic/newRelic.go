@@ -2,6 +2,7 @@ package newrelic
 
 import (
 	"os"
+	"time"
 
 	"new-relic-monitor/config"
 
@@ -13,9 +14,11 @@ func NewApplicationWithConfig(options config.Config) (*newrelic.Application, err
 		newrelic.ConfigAppName("S3 Backup Monitor"),
 		newrelic.ConfigLicense(options.NewRelicLicenseKey),
 		newrelic.ConfigDebugLogger(os.Stdout),
+		newrelic.ConfigAppLogForwardingEnabled(true),
 	)
 	if err != nil {
 		return nil, err
 	}
+	app.WaitForConnection(5 * time.Second)
 	return app, nil
 }

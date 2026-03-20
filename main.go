@@ -11,40 +11,45 @@ import (
 	"time"
 
 	"new-relic-monitor/config"
+	newrelic "new-relic-monitor/newRelic"
 )
 
 type BucketFile struct {
-	ModifedAt time.Time
-	Date      string
-	Time      string
-	Size      int
-	Name      string
+	ModifiedAt time.Time
+	Date       string
+	Time       string
+	Size       int
+	Name       string
+}
+
+func (bf *BucketFile) ToNewRelicEvent() map[string]interface{} {
+	event := map[string]interface{}{
+		"name":       bf.Name,
+		"modifiedat": bf.ModifiedAt.String(),
+		"size":       bf.Size,
+	}
+
+	return event
 }
 
 const configFilePath = "./env.json"
 
 func main() {
 	configOptions := config.Config{}
-
 	configOptions.ReadConfigFile(configFilePath)
 
-	bucketURL := fmt.Sprintf("s3://%s", configOptions.BucketName)
-	bufOut := bytes.Buffer{}
-	bufErr := bytes.Buffer{}
-
-	cmd := exec.Command("aws", "s3", "ls", bucketURL)
-	cmd.Stdout = &bufOut
-	cmd.Stderr = &bufErr
-	cmd.Stdin = os.Stdin
-
-	err := cmd.Run()
+	newRelicApp, err := newrelic.NewApplicationWithConfig(configOptions)
 	if err != nil {
-		fmt.Printf("ERROR RUNNING PROCESS\n%s\n", bufErr.String())
+		fmt.Printf("ERROR CREATING NEW RELIC APP\n%s\n", err)
 		os.Exit(1)
 	}
+	defer newRelicApp.Shutdown(10 * time.Second)
 
-	outputRawString := strings.TrimSpace(bufOut.String())
-	lines := strings.Split(outputRawString, "\n")
+	lines, err := listBucket(configOptions.BucketName)
+	if err != nil {
+		fmt.Printf("ERROR LISTING BUCKET\n%s\n", err)
+		os.Exit(1)
+	}
 
 	bucketFiles := []BucketFile{}
 
@@ -64,9 +69,10 @@ func main() {
 	}
 
 	for _, bFile := range bucketFiles {
-		if backupOccurred(bFile.ModifedAt) {
+		if backupOccurred(bFile.ModifiedAt) {
 			fmt.Printf("Backup Occurred: %s\n", bFile.Name)
 		}
+		newRelicApp.RecordCustomEvent("S3BACKUPCHECK", bFile.ToNewRelicEvent())
 	}
 }
 
@@ -88,11 +94,11 @@ func populateFileFromLine(cmdOutput string, config config.Config) (BucketFile, e
 		return BucketFile{}, err
 	}
 	toAdd := BucketFile{
-		Name:      name,
-		ModifedAt: lastModified,
-		Size:      size,
-		Date:      date,
-		Time:      clockTime,
+		Name:       name,
+		ModifiedAt: lastModified,
+		Size:       size,
+		Date:       date,
+		Time:       clockTime,
 	}
 	return toAdd, nil
 }
@@ -103,4 +109,17 @@ func backupOccurred(modifiedAtTime time.Time) bool {
 	fmt.Printf("today: %v  modifiedAt %v\n", today, modifiedAt)
 	cutoff := time.Now().UTC().Add(-24 * time.Hour)
 	return modifiedAt.After(cutoff)
+}
+
+func listBucket(bucketName string) ([]string, error) {
+	bucketURL := fmt.Sprintf("s3://%s", bucketName)
+	cmd := exec.Command("aws", "s3", "ls", bucketURL)
+	var bufOut, bufErr bytes.Buffer
+	cmd.Stdout = &bufOut
+	cmd.Stderr = &bufErr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("ERROR RUNNING PROCESS\n%s", bufErr.String())
+	}
+	lines := strings.Split(strings.TrimSpace(bufOut.String()), "\n")
+	return lines, nil
 }
