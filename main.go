@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -50,14 +51,14 @@ func main() {
 
 	newRelicApp, err := newrelic.NewApplicationWithConfig(configOptions)
 	if err != nil {
-		fmt.Printf("ERROR CREATING NEW RELIC APP\n%s\n", err)
+		fmt.Fprintf(os.Stderr, "ERROR CREATING NEW RELIC APP: %s", err)
 		os.Exit(1)
 	}
 	defer newRelicApp.Shutdown(10 * time.Second)
 
 	lines, err := listBucket(configOptions.BucketName)
 	if err != nil {
-		fmt.Printf("ERROR LISTING BUCKET\n%s\n", err)
+		fmt.Fprintf(os.Stderr, "ERROR LISTING BUCKET: %s", err)
 		os.Exit(1)
 	}
 
@@ -67,7 +68,7 @@ func main() {
 		if len(line) > 0 {
 			toAdd, err := populateFileFromLine(line, configOptions)
 			if err != nil {
-				fmt.Printf("error populating file: %v", err)
+				fmt.Fprintf(os.Stderr, "error populating file: %v", err)
 				os.Exit(1)
 			}
 
@@ -122,6 +123,9 @@ func backupOccurredWithinDay(modifiedAtTime time.Time) bool {
 }
 
 func listBucket(bucketName string) ([]string, error) {
+	if _, err := exec.LookPath("aws"); err != nil {
+		return nil, fmt.Errorf("aws cli not found in PATH")
+	}
 	bucketURL := fmt.Sprintf("s3://%s", bucketName)
 	cmd := exec.Command("aws", "s3", "ls", bucketURL)
 	var bufOut, bufErr bytes.Buffer
