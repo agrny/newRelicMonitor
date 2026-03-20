@@ -68,13 +68,18 @@ func main() {
 }
 
 func populateFileFromLine(cmdOutput string) (BucketFile, error) {
-	columns := strings.Split(cmdOutput, " ")
+	columns := strings.Fields(cmdOutput)
+	if len(columns) < 4 {
+		return BucketFile{}, fmt.Errorf("unexpected line format: %s", cmdOutput)
+	}
 	date := columns[0]
 	clockTime := columns[1]
-	size, _ := strconv.Atoi(columns[10])
-	name := columns[11]
+	size, _ := strconv.Atoi(columns[2])
+
+	// handles if filename has spaces
+	name := strings.Join(columns[3:], " ")
+
 	fmt.Printf("date: %s time: %s size: %d name: %s\n", date, clockTime, size, name)
-	println()
 	lastModified, err := time.ParseInLocation(TimeParseLayout, fmt.Sprintf("%s %s", date, clockTime), time.UTC)
 	if err != nil {
 		return BucketFile{}, err
@@ -92,8 +97,8 @@ func populateFileFromLine(cmdOutput string) (BucketFile, error) {
 func backupOccurred(modifiedAtTime time.Time) bool {
 	today := time.Now().Local()
 	modifiedAt := modifiedAtTime.Local()
-	// fmt.Printf("today: %v, modifiedDay %v\n", today, modifedAtDay)
-	fmt.Printf("modifiedDayTime %v\n", modifiedAt)
+	fmt.Printf("modifiedAt %v\n", modifiedAt)
 	fmt.Printf("today %v\n", today)
-	return modifiedAt.After(today.Add(-(24 * time.Hour)))
+	cutoff := time.Now().UTC().Add(-24 * time.Hour)
+	return modifiedAt.After(cutoff)
 }
