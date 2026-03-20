@@ -60,11 +60,9 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Files: %+v\n", bucketFiles)
-
 	for _, bFile := range bucketFiles {
 		if backupOccurred(bFile.ModifedAt) {
-			fmt.Printf("Backup Occurred: %s", bFile.Name)
+			fmt.Printf("Backup Occurred: %s\n", bFile.Name)
 		}
 	}
 }
@@ -76,13 +74,14 @@ func populateFileFromLine(cmdOutput string) (BucketFile, error) {
 	size, _ := strconv.Atoi(columns[10])
 	name := columns[11]
 	fmt.Printf("date: %s time: %s size: %d name: %s\n", date, clockTime, size, name)
+	println()
 	lastModified, err := time.ParseInLocation(TimeParseLayout, fmt.Sprintf("%s %s", date, clockTime), time.UTC)
 	if err != nil {
 		return BucketFile{}, err
 	}
 	toAdd := BucketFile{
 		Name:      name,
-		ModifedAt: lastModified.UTC().Truncate(24 * time.Hour),
+		ModifedAt: lastModified,
 		Size:      size,
 		Date:      date,
 		Time:      clockTime,
@@ -91,11 +90,10 @@ func populateFileFromLine(cmdOutput string) (BucketFile, error) {
 }
 
 func backupOccurred(modifiedAtTime time.Time) bool {
-	today := time.Now().UTC().Day()
-	modifedAtDay := modifiedAtTime.UTC().Day()
-	fmt.Printf("today: %v, modifiedDay %v\n", today, modifedAtDay)
-	fmt.Printf("modifiedDayTime %v\n", modifiedAtTime.UTC())
-	fmt.Printf("today %v\n", time.Now().UTC())
-
-	return today == modifedAtDay
+	today := time.Now().Local()
+	modifiedAt := modifiedAtTime.Local()
+	// fmt.Printf("today: %v, modifiedDay %v\n", today, modifedAtDay)
+	fmt.Printf("modifiedDayTime %v\n", modifiedAt)
+	fmt.Printf("today %v\n", today)
+	return modifiedAt.After(today.Add(-(24 * time.Hour)))
 }
