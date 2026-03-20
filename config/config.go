@@ -20,6 +20,7 @@ func (c *Config) ReadConfigFile(path string) {
 
 	c.AWSKeyID = configOptions.AWSKeyID
 	c.AWSKeySecret = configOptions.AWSKeySecret
+	c.NewRelicLicenseKey = configOptions.NewRelicLicenseKey
 	c.BucketName = configOptions.BucketName
 	c.TimeParseLayout = configOptions.TimeParseLayout
 }
