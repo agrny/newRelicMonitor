@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"new-relic-monitor/config"
 )
 
 type BucketFile struct {
@@ -19,13 +21,14 @@ type BucketFile struct {
 	Name      string
 }
 
-const (
-	TimeParseLayout = "2006-01-02 15:04:05"
-	BucketName      = "backup-bucket-767398055203-us-east-1-an"
-)
+const configFilePath = "./env.json"
 
 func main() {
-	bucketURL := fmt.Sprintf("s3://%s", BucketName)
+	configOptions := config.Config{}
+
+	configOptions.ReadConfigFile(configFilePath)
+
+	bucketURL := fmt.Sprintf("s3://%s", configOptions.BucketName)
 	bufOut := bytes.Buffer{}
 	bufErr := bytes.Buffer{}
 
@@ -47,7 +50,7 @@ func main() {
 
 	for _, line := range lines {
 		if len(line) > 0 {
-			toAdd, err := populateFileFromLine(line)
+			toAdd, err := populateFileFromLine(line, configOptions)
 			if err != nil {
 				fmt.Printf("error populating file: %v", err)
 				os.Exit(1)
@@ -67,7 +70,7 @@ func main() {
 	}
 }
 
-func populateFileFromLine(cmdOutput string) (BucketFile, error) {
+func populateFileFromLine(cmdOutput string, config config.Config) (BucketFile, error) {
 	columns := strings.Fields(cmdOutput)
 	if len(columns) < 4 {
 		return BucketFile{}, fmt.Errorf("unexpected line format: %s", cmdOutput)
@@ -79,8 +82,8 @@ func populateFileFromLine(cmdOutput string) (BucketFile, error) {
 	// handles if filename has spaces
 	name := strings.Join(columns[3:], " ")
 
-	fmt.Printf("date: %s time: %s size: %d name: %s\n", date, clockTime, size, name)
-	lastModified, err := time.ParseInLocation(TimeParseLayout, fmt.Sprintf("%s %s", date, clockTime), time.UTC)
+	// fmt.Printf("date: %s time: %s size: %d name: %s\n", date, clockTime, size, name)
+	lastModified, err := time.ParseInLocation(config.TimeParseLayout, fmt.Sprintf("%s %s", date, clockTime), time.UTC)
 	if err != nil {
 		return BucketFile{}, err
 	}
@@ -97,8 +100,7 @@ func populateFileFromLine(cmdOutput string) (BucketFile, error) {
 func backupOccurred(modifiedAtTime time.Time) bool {
 	today := time.Now().Local()
 	modifiedAt := modifiedAtTime.Local()
-	fmt.Printf("modifiedAt %v\n", modifiedAt)
-	fmt.Printf("today %v\n", today)
+	fmt.Printf("today: %v  modifiedAt %v\n", today, modifiedAt)
 	cutoff := time.Now().UTC().Add(-24 * time.Hour)
 	return modifiedAt.After(cutoff)
 }
