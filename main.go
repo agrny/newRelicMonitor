@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,11 +33,20 @@ func (bf *BucketFile) ToNewRelicEvent() map[string]any {
 	return event
 }
 
-const configFilePath = "./env.json"
+const configFilePath = "./config.json"
 
 func main() {
+	configPath := flag.String("config", "", "path to config file")
+	flag.Parse()
+
+	if *configPath == "" {
+		*configPath = os.Getenv("S3BACKUPCONFIG")
+		if *configPath == "" {
+			*configPath = configFilePath
+		}
+	}
 	configOptions := config.Config{}
-	configOptions.ReadConfigFile(configFilePath)
+	configOptions.Load(*configPath)
 
 	newRelicApp, err := newrelic.NewApplicationWithConfig(configOptions)
 	if err != nil {
@@ -69,7 +79,7 @@ func main() {
 	}
 
 	for _, bFile := range bucketFiles {
-		if backupOccurred(bFile.ModifiedAt) {
+		if backupOccurredWithinDay(bFile.ModifiedAt) {
 			fmt.Printf("Backup Occurred: %s\n", bFile.Name)
 		}
 		newRelicApp.RecordCustomEvent("S3BACKUPCHECK", bFile.ToNewRelicEvent())
@@ -103,7 +113,7 @@ func populateFileFromLine(cmdOutput string, config config.Config) (BucketFile, e
 	return toAdd, nil
 }
 
-func backupOccurred(modifiedAtTime time.Time) bool {
+func backupOccurredWithinDay(modifiedAtTime time.Time) bool {
 	today := time.Now().Local()
 	modifiedAt := modifiedAtTime.Local()
 	fmt.Printf("today: %v  modifiedAt %v\n", today, modifiedAt)
