@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"new-relic-monitor/config"
 )
 
 type NewRelicClient struct {
@@ -18,7 +16,7 @@ type NewRelicClient struct {
 	Client             *http.Client
 }
 
-func NewClientWithConfig(options config.Config) (*NewRelicClient, error) {
+func NewClientWithConfig(options Config) (*NewRelicClient, error) {
 	if options.NewRelicLicenseKey == "" {
 		return nil, fmt.Errorf("new relic license key required")
 	}

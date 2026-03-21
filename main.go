@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
-	"new-relic-monitor/config"
-	"new-relic-monitor/newRelic"
+	newrelic "new-relic-monitor/newRelic"
 )
 
 type BucketFile struct {
@@ -25,7 +25,7 @@ type BucketFile struct {
 
 func (bf *BucketFile) ToNewRelicEvent() map[string]any {
 	event := map[string]any{
-		"eventType":   "S3BACKUPCHECK",
+		"eventType":  "S3BACKUPCHECK",
 		"name":       bf.Name,
 		"modifiedat": bf.ModifiedAt.String(),
 		"size":       bf.Size,
@@ -47,11 +47,14 @@ func main() {
 		}
 	}
 
-	// TODO should just be config.New() or config.NewFromFile() instead of making object then loading method on itself
-	configOptions := config.Config{}
-	cfg, _ := configOptions.Load(*configPath)
+	cfg, err := newrelic.LoadConfig(*configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR LOADING CONFIG: %s", err)
+		os.Exit(1)
+	}
 
 	newRelicClient, err := newrelic.NewClientWithConfig(*cfg)
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR CREATING NEW RELIC APP: %s", err)
 		os.Exit(1)
@@ -63,32 +66,39 @@ func main() {
 		os.Exit(1)
 	}
 
-	bucketFiles := []BucketFile{}
-
-	for _, line := range lines {
-		if len(line) > 0 {
-			toAdd, err := populateFileFromLine(line, *cfg)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "error populating file: %v", err)
-				os.Exit(1)
-			}
-
-			bucketFiles = append(bucketFiles, toAdd)
-
-		} else {
-			println("skipping empty line")
-		}
+	bucketFiles, err := populateBucketFiles(lines, *cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error populating bucket files: %v", err)
+		os.Exit(1)
 	}
 
-	for _, bFile := range bucketFiles {
-		if backupOccurredWithinDay(bFile.ModifiedAt) {
-			fmt.Printf("Backup Occurred: %s\n", bFile.Name)
-		}
-		newRelicClient.RecordCustomEvent("S3BACKUPCHECK", bFile.ToNewRelicEvent())
+	mostRecent := slices.MaxFunc(bucketFiles, func(a, b BucketFile) int {
+		return a.ModifiedAt.Compare(b.ModifiedAt)
+	})
+
+	if backupOccurredWithinDay(mostRecent.ModifiedAt) {
+		newRelicClient.RecordCustomEvent("S3BACKUPCHECK", mostRecent.ToNewRelicEvent())
+		fmt.Printf("Backup Occurred: %s\n", mostRecent.Name)
 	}
 }
 
-func populateFileFromLine(cmdOutput string, config config.Config) (BucketFile, error) {
+func populateBucketFiles(lines []string, cfg newrelic.Config) ([]BucketFile, error) {
+	bucketFiles := []BucketFile{}
+	for _, line := range lines {
+		if len(line) == 0 {
+			println("skipping empty line")
+			continue
+		}
+		toAdd, err := populateFileFromLine(line, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("error populating file: %w", err)
+		}
+		bucketFiles = append(bucketFiles, toAdd)
+	}
+	return bucketFiles, nil
+}
+
+func populateFileFromLine(cmdOutput string, config newrelic.Config) (BucketFile, error) {
 	columns := strings.Fields(cmdOutput)
 	if len(columns) < 4 {
 		return BucketFile{}, fmt.Errorf("unexpected line format: %s", cmdOutput)
@@ -116,9 +126,9 @@ func populateFileFromLine(cmdOutput string, config config.Config) (BucketFile, e
 }
 
 func backupOccurredWithinDay(modifiedAtTime time.Time) bool {
-	// today := time.Now().Local()
+	today := time.Now().Local()
 	modifiedAt := modifiedAtTime.Local()
-	// fmt.Printf("today: %v  modifiedAt %v\n", today, modifiedAt)
+	fmt.Printf("today: %v  modifiedAt %v\n", today, modifiedAt)
 	cutoff := time.Now().UTC().Add(-24 * time.Hour)
 	return modifiedAt.After(cutoff)
 }

@@ -1,5 +1,4 @@
-// Package config
-package config
+package newrelic
 
 import (
 	"encoding/json"
@@ -8,29 +7,26 @@ import (
 )
 
 type Config struct {
-	NewRelicLicenseKey string
-	BucketName         string
-	TimeParseLayout    string
-	NewRelicURL        string
-	NewRelicAccountID  string
+	NewRelicLicenseKey string `json:"newreliclicensekey"`
+	BucketName         string `json:"bucketname"`
+	TimeParseLayout    string `json:"timeparselayout"`
+	NewRelicURL        string `json:"newrelicurl"`
+	NewRelicAccountID  string `json:"newrelicaccountid"`
 }
 
-func (c *Config) Load(path string) (*Config, error) {
-	configOptions := Config{}
+func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(data, &configOptions)
-	if err != nil {
+	cfg := &Config{}
+	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
-	err = configOptions.validate()
-	if err != nil {
+	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
-
-	return &configOptions, nil
+	return cfg, nil
 }
 
 func (c *Config) validate() error {
@@ -46,15 +42,14 @@ func (c *Config) validate() error {
 	if err := requireField("BucketName", c.BucketName); err != nil {
 		return err
 	}
-	if err := requireField("TimeParseLayout", c.TimeParseLayout); err != nil {
+	if c.TimeParseLayout == "" {
 		c.TimeParseLayout = "2006-01-02 15:04:05"
 	}
-
 	return nil
 }
 
-func requireField(name, inputField string) error {
-	if inputField == "" {
+func requireField(name, value string) error {
+	if value == "" {
 		return fmt.Errorf("required field [%s] not found in config", name)
 	}
 	return nil
