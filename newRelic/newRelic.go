@@ -18,7 +18,7 @@ type NewRelicClient struct {
 
 func NewClientWithConfig(options Config) (*NewRelicClient, error) {
 	if options.NewRelicLicenseKey == "" {
-		return nil, fmt.Errorf("new relic license key required")
+		return nil, fmt.Errorf("newreliclicensekey field required")
 	}
 
 	return &NewRelicClient{
