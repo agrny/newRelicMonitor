@@ -23,12 +23,18 @@ type BucketFile struct {
 	Name       string
 }
 
-func (bf *BucketFile) ToNewRelicEvent() map[string]any {
+func (bf *BucketFile) ToNewRelicEvent(backupSucceeded bool) map[string]any {
+	backupStatus := 0
+	if backupSucceeded {
+		backupStatus = 1
+	}
+
 	event := map[string]any{
 		"eventType":  "S3BACKUPCHECK",
 		"name":       bf.Name,
 		"modifiedat": bf.ModifiedAt.String(),
 		"size":       bf.Size,
+		"isBackedUp": backupStatus,
 	}
 
 	return event
@@ -54,7 +60,6 @@ func main() {
 	}
 
 	newRelicClient, err := newrelic.NewClientWithConfig(*cfg)
-
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR CREATING NEW RELIC APP: %s", err)
 		os.Exit(1)
@@ -76,10 +81,8 @@ func main() {
 		return a.ModifiedAt.Compare(b.ModifiedAt)
 	})
 
-	if backupOccurredWithinDay(mostRecent.ModifiedAt) {
-		newRelicClient.RecordCustomEvent("S3BACKUPCHECK", mostRecent.ToNewRelicEvent())
-		fmt.Printf("Backup Occurred: %s\n", mostRecent.Name)
-	}
+	backupStatus := backupOccurredWithinDay(mostRecent.ModifiedAt)
+	newRelicClient.RecordCustomEvent("S3BACKUPCHECK", mostRecent.ToNewRelicEvent(backupStatus))
 }
 
 func populateBucketFiles(lines []string, cfg newrelic.Config) ([]BucketFile, error) {
@@ -126,9 +129,7 @@ func populateFileFromLine(cmdOutput string, config newrelic.Config) (BucketFile,
 }
 
 func backupOccurredWithinDay(modifiedAtTime time.Time) bool {
-	today := time.Now().Local()
 	modifiedAt := modifiedAtTime.Local()
-	fmt.Printf("today: %v  modifiedAt %v\n", today, modifiedAt)
 	cutoff := time.Now().UTC().Add(-24 * time.Hour)
 	return modifiedAt.After(cutoff)
 }
