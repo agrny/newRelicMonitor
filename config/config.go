@@ -11,6 +11,8 @@ type Config struct {
 	NewRelicLicenseKey string
 	BucketName         string
 	TimeParseLayout    string
+	NewRelicURL        string
+	NewRelicAccountID  string
 }
 
 func (c *Config) Load(path string) (*Config, error) {

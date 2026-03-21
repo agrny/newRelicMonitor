@@ -25,6 +25,7 @@ type BucketFile struct {
 
 func (bf *BucketFile) ToNewRelicEvent() map[string]any {
 	event := map[string]any{
+		"eventType":   "S3BACKUPCHECK",
 		"name":       bf.Name,
 		"modifiedat": bf.ModifiedAt.String(),
 		"size":       bf.Size,
@@ -33,7 +34,7 @@ func (bf *BucketFile) ToNewRelicEvent() map[string]any {
 	return event
 }
 
-const configFilePath = "./config.json"
+const configFilePath = "./env.json"
 
 func main() {
 	configPath := flag.String("config", "", "path to config file")
@@ -45,17 +46,18 @@ func main() {
 			*configPath = configFilePath
 		}
 	}
-	configOptions := config.Config{}
-	configOptions.Load(*configPath)
 
-	newRelicApp, err := newrelic.NewApplicationWithConfig(configOptions)
+	// TODO should just be config.New() or config.NewFromFile() instead of making object then loading method on itself
+	configOptions := config.Config{}
+	cfg, _ := configOptions.Load(*configPath)
+
+	newRelicClient, err := newrelic.NewClientWithConfig(*cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR CREATING NEW RELIC APP: %s", err)
 		os.Exit(1)
 	}
-	defer newRelicApp.Shutdown(10 * time.Second)
 
-	lines, err := listBucket(configOptions.BucketName)
+	lines, err := listBucket(cfg.BucketName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR LISTING BUCKET: %s", err)
 		os.Exit(1)
@@ -65,7 +67,7 @@ func main() {
 
 	for _, line := range lines {
 		if len(line) > 0 {
-			toAdd, err := populateFileFromLine(line, configOptions)
+			toAdd, err := populateFileFromLine(line, *cfg)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "error populating file: %v", err)
 				os.Exit(1)
@@ -82,7 +84,7 @@ func main() {
 		if backupOccurredWithinDay(bFile.ModifiedAt) {
 			fmt.Printf("Backup Occurred: %s\n", bFile.Name)
 		}
-		newRelicApp.RecordCustomEvent("S3BACKUPCHECK", bFile.ToNewRelicEvent())
+		newRelicClient.RecordCustomEvent("S3BACKUPCHECK", bFile.ToNewRelicEvent())
 	}
 }
 
@@ -114,9 +116,9 @@ func populateFileFromLine(cmdOutput string, config config.Config) (BucketFile, e
 }
 
 func backupOccurredWithinDay(modifiedAtTime time.Time) bool {
-	today := time.Now().Local()
+	// today := time.Now().Local()
 	modifiedAt := modifiedAtTime.Local()
-	fmt.Printf("today: %v  modifiedAt %v\n", today, modifiedAt)
+	// fmt.Printf("today: %v  modifiedAt %v\n", today, modifiedAt)
 	cutoff := time.Now().UTC().Add(-24 * time.Hour)
 	return modifiedAt.After(cutoff)
 }
