@@ -25,12 +25,22 @@ func (c *Config) Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	err = configOptions.validate()
+	if err != nil {
+		return nil, err
+	}
 
 	return &configOptions, nil
 }
 
 func (c *Config) validate() error {
 	if err := requireField("NewRelicLicenseKey", c.NewRelicLicenseKey); err != nil {
+		return err
+	}
+	if err := requireField("NewRelicURL", c.NewRelicURL); err != nil {
+		return err
+	}
+	if err := requireField("NewRelicAccountID", c.NewRelicAccountID); err != nil {
 		return err
 	}
 	if err := requireField("BucketName", c.BucketName); err != nil {
